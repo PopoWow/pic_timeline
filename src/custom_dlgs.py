@@ -99,9 +99,6 @@ class DateTimeDialog(MyDialog):
                             year=int(self.sv_year.get()),
                             hour=int(self.entry_hour.get()), minute=int(self.entry_min.get()),
                             second=int(self.entry_sec.get()))
-        print dt_input
         if dt_input != self.init_dt:
             self.result = dt_input
-        else:
-            print "no changes detected"
 
