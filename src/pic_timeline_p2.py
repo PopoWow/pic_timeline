@@ -1,3 +1,7 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+
 import os
 import tempfile
 import shutil
@@ -28,24 +32,40 @@ COLS = 5
 class PicTimelineApp(Frame):
 
     # -----------------------------------------------------------------------------
-    # class SourceData
+    # class SourceListData
     #        Data defining a source path
     # -----------------------------------------------------------------------------        
-    class SourceData(object):
+    class SourceListData(object):
+        """Stores the time shift and color data for a source item."""
+        
         colors = [{'fg':'red', 'bg':'white'}, {'fg':'green', 'bg':'white'},
                   {'fg':'blue', 'bg':'white'}, {'fg':'cyan', 'bg':'white'},
                   {'fg':'magenta', 'bg':'white'}, {'fg':'yellow', 'bg':'white'}]
         DEFAULT_COLORS = {'fg':'black', 'bg':'white'}
+        
         def __init__(self):
             self.time_shift = 0
-            self.color = (PicTimelineApp.SourceData.colors.pop(0) if PicTimelineApp.SourceData.colors 
-                          else PicTimelineApp.SourceData.DEFAULT_COLORS)
+            
+            # pop first item out of colors list and assign it to this source
+            # if this source is deleted, then it's pushed back onto the list.
+            # If no colors are left in the list, use the default of black on white. 
+            self.color = (PicTimelineApp.SourceListData.colors.pop(0) 
+                            if PicTimelineApp.SourceListData.colors 
+                            else PicTimelineApp.SourceListData.DEFAULT_COLORS)
             
     # -----------------------------------------------------------------------------
-    # class ListData
+    # class OutputsListData
     #        Data defining a file to be timelined
     # -----------------------------------------------------------------------------        
-    class ListData(object):
+    class OutputsListData(object):
+        """Stores the data for an file to process.
+        id: Reference to a source item.  Can be used as key to sources dict.
+        filename: Name of original image name to process
+        data: Reference to source data object.  Used to get timeshift/color info.
+        _dt: datetime information from file.  "dt" property can shift this
+             with source's timeshift info (if any) or completely overriden
+             by _dt_override.
+        """
         def __init__(self, id, filename, data, dt):
             self.id = id
             self.filename = filename
@@ -54,12 +74,17 @@ class PicTimelineApp(Frame):
             # immutable datetime
             self._dt = dt
         
+        # do this is str or repr?  str makes more sense. 
         def __str__(self):
             date_str = self.dt.strftime("%B %d, %H:%M:%S")
             return "{} ({})".format(self.filename, date_str)
         
         @property
         def colors(self):
+            """Custom property getter that returns color on white (ex: red on white)
+            if the item to process has not been overriden.  It flips to white on color
+            if the ITEM has been manually overriden.
+            """
             if self.is_overriden():
                 retval = {'fg':self.data.color['bg'], 'bg':self.data.color['fg']}
                 return retval
@@ -68,6 +93,10 @@ class PicTimelineApp(Frame):
             
         @property 
         def dt(self):
+            """dt property: returns original image file datetime.
+            Can be modified with a source shift value or completely
+            overriden by an Item override.
+            """
             # property getter that returns the stored datetime value
             # shifted by the shift amount.
             if self.is_overriden():
@@ -84,10 +113,13 @@ class PicTimelineApp(Frame):
 
         @dt.deleter
         def dt(self):
+            """Delete process item override and revert to image file datetime + shift
+            """
             # initial dt immutable
             if self.is_overriden():
                 del self._dt_override
             
+        # is this pythonic
         def is_overriden(self):
             return hasattr(self, "_dt_override")
         
@@ -99,6 +131,7 @@ class PicTimelineApp(Frame):
         
         # check file system case sensitivity
         # By default mkstemp() creates a file with a name that begins with 'tmp' (lowercase)
+        # macos/windows do not seem to be case sensitive
         tmphandle, tmppath = tempfile.mkstemp()
         self.fs_case_sensitive = not os.path.exists(tmppath.upper())
         try:                                                         
@@ -147,7 +180,7 @@ class PicTimelineApp(Frame):
         self.listbox_output.grid(row=1, column=0, sticky=ALL)
         self.listbox_output.bind("<Double-Button-1>", func=self.on_double_click_output)
     
-    def get_item_key(self, ndx_sel):
+    def get_source_key(self, ndx_sel):
         item_key = self.listbox_sources.get(ndx_sel)
         ndx_sep = item_key.find(":")
         if ndx_sep != -1:
@@ -167,7 +200,7 @@ class PicTimelineApp(Frame):
             if jpeg_files:
                 #directory is new(ok) and has some jpgs in it so add it
                 self.listbox_sources.insert(END, new_source_dir)
-                new_data = self.SourceData()
+                new_data = self.SourceListData()
                 self.sources_data[new_source_dir] = new_data
                 self.listbox_sources.itemconfig(END, new_data.color)
                 
@@ -184,7 +217,7 @@ class PicTimelineApp(Frame):
         cursel = self.listbox_sources.curselection()
         if cursel:
             index = int(cursel[0])
-            key = self.get_item_key(index)
+            key = self.get_source_key(index)
             
             # delete listbox item
             self.listbox_sources.delete(index)
@@ -192,8 +225,8 @@ class PicTimelineApp(Frame):
             # restore the text color to the list of available colors unless it's
             # the default (black/white)
             cur_color = self.sources_data[key].color
-            if (cur_color != PicTimelineApp.SourceData.DEFAULT_COLORS):
-                PicTimelineApp.SourceData.colors.insert(0, cur_color)
+            if (cur_color != PicTimelineApp.SourceListData.DEFAULT_COLORS):
+                PicTimelineApp.SourceListData.colors.insert(0, cur_color)
             
             # delete item data corresponding to removed source
             del self.sources_data[key]
@@ -207,7 +240,7 @@ class PicTimelineApp(Frame):
         
     def on_double_click_sources(self, click_event):
         ndx_cursel = int(self.listbox_sources.curselection()[0])
-        item_text = self.get_item_key(ndx_cursel)
+        item_text = self.get_source_key(ndx_cursel)
 
         cur_data = self.sources_data[item_text]
         dlg = TimeShiftDialog(self, cur_data.time_shift)
@@ -269,7 +302,7 @@ class PicTimelineApp(Frame):
                 else:
                     dt = datetime.fromtimestamp(os.path.getmtime(full_path))
                 
-                new_item = self.ListData(new_source_dir, file, self.sources_data[new_source_dir], dt)
+                new_item = self.OutputsListData(new_source_dir, file, self.sources_data[new_source_dir], dt)
                 self.list_data.append(new_item)
         self.update_outputs()
         return True
