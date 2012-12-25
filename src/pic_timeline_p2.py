@@ -24,7 +24,8 @@ MIN_WIDTH = 480
 MIN_HEIGHT = 360
 DEF_SIZE = "640x480"
 COLS = 5
-        
+APP_GUID = "{75a56efb-b786-424f-b6a3-9649a5d22a83}"
+
 # -----------------------------------------------------------------------------
 # class TimeShiftDialog
 #        Custom dialog that prompts for a timeshift value in seconds
@@ -124,17 +125,44 @@ class PicTimelineApp(Frame):
             return hasattr(self, "_dt_override")
         
 
+    # -----------------------------------------------------------------------------
+    # class PicTimelineApp members
+    # -----------------------------------------------------------------------------        
+
     def __init__(self, master=None):
         Frame.__init__(self, master)
         self.sources_data = {}
         self.list_data = []
         
+        # create our temp folder in the temp dir.  clear it out every session
+        if sys.platform == "win32":
+            # having problems launching the photoviewer for images staged in
+            # %TEMP%.  Falling back to APPDATA...
+            tempdir = os.environ['APPDATA']
+        else:
+            tempdir = tempfile.gettempdir()
+            
+        self.temp_dir = os.path.join(tempdir, 'KyleKawa', APP_GUID)
+
+        if os.path.exists(self.temp_dir) and not os.path.isdir(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+        if not os.path.exists(self.temp_dir):
+            os.makedirs(self.temp_dir)
+        else:
+            # get contents of temp_dir
+            (dirpath, tmp_dirs, tmp_files) = next(os.walk(self.temp_dir))
+            # delete files
+            map(os.unlink, [os.path.join(dirpath, file) for file in tmp_files])
+            # delete dirs
+            map(shutil.rmtree, [os.path.join(dirpath, dir) for dir in tmp_dirs])
+        
         # check file system case sensitivity
         # By default mkstemp() creates a file with a name that begins with 'tmp' (lowercase)
         # macos/windows do not seem to be case sensitive
-        tmphandle, tmppath = tempfile.mkstemp()
+        tmphandle, tmppath = tempfile.mkstemp(dir=self.temp_dir)
         self.fs_case_sensitive = not os.path.exists(tmppath.upper())
-        try:                                                         
+        try:
+            print tmppath                                                           
             os.remove(tmppath)
         except:
             print 'Failed to remove tempfile: "{}"'.format(tmppath)
@@ -142,6 +170,8 @@ class PicTimelineApp(Frame):
         self.configure_widgets()
 
     def configure_widgets(self):
+        """definte and lay out tkinter widgets
+        """        
         self.master.rowconfigure(0, weight=1)
         self.master.columnconfigure(0, weight=1)
         self.grid(sticky=ALL)
@@ -176,9 +206,12 @@ class PicTimelineApp(Frame):
         sub_frame.grid(row=0, column=2, rowspan=9, columnspan=3, sticky=ALL)
         
         Label(sub_frame, text="Proposed Order").grid(row=0, column=0, sticky=WIDTH)
-        self.listbox_output = Listbox(sub_frame)
+        self.listbox_output = Listbox(sub_frame, selectmode=EXTENDED)
         self.listbox_output.grid(row=1, column=0, sticky=ALL)
         self.listbox_output.bind("<Double-Button-1>", func=self.on_double_click_output)
+        Button(sub_frame,
+               text="Preview",
+               command=self.handle_preview).grid(row=2, column=0, sticky=WIDTH)
     
     def get_source_key(self, ndx_sel):
         item_key = self.listbox_sources.get(ndx_sel)
@@ -188,7 +221,7 @@ class PicTimelineApp(Frame):
         return item_key
     
     def handle_add_source(self):
-        new_source_dir = askdirectory(parent=self)
+        new_source_dir = askdirectory()
         
         if self.fs_case_sensitive:
             ok = new_source_dir not in self.listbox_sources.get(0, END)
@@ -206,8 +239,8 @@ class PicTimelineApp(Frame):
                 
                 self.process_new_source(new_source_dir, jpeg_files)
 
-                self.listbox_sources.focus_set()
                 self.listbox_sources.activate(END)
+                self.listbox_sources.focus_set()
             else:
                 showerror(title="Source selection error", message='"{}" does not contain any JPG images'.format(new_source_dir))
         else:
@@ -282,7 +315,7 @@ class PicTimelineApp(Frame):
             self.listbox_output.itemconfig(ndx_sort, cur_item.colors)
 
     def handle_set_output_path(self):
-        new_source_dir = askdirectory(parent=self)
+        new_source_dir = askdirectory()
         self.text_path.delete(1.0, END)
         self.text_path.insert(END, new_source_dir)
     
@@ -329,15 +362,58 @@ class PicTimelineApp(Frame):
             # calculate how many digits needed to display all images
             index_width = len(str(len(self.list_data)))
 
-            for ndx, file in enumerate([os.path.join(cur_item.id, cur_item.filename)
+            for ndx, src_path in enumerate([os.path.join(cur_item.id, cur_item.filename)
                                         for cur_item in self.list_data], 1):
                 dest_path = os.path.join(output_path, "{}{}.jpg".format(prefix, str(ndx).zfill(index_width)))
                 
                 # use copy2 to preserve metadata
-                shutil.copy2(file, dest_path)
+                shutil.copy2(src_path, dest_path)
                 
                 #print file, dest_path
-                      
+    
+    def handle_preview(self):
+        # indexes come back as strs... d'oh!
+        cursel = map(int, self.listbox_output.curselection())
+
+        if sys.platform == "win32":
+            # Windows photo viewer does not support opening list of pictures.
+            # Open multiple instances in reverse order?
+            files_to_preview = [os.path.normpath(os.path.join(self.list_data[index].id, self.list_data[index].filename))
+                                for index in cursel]
+#            
+#            for file in files_to_preview:
+#                cl_str = r'start rundll32.exe "%ProgramFiles%\Windows Photo Viewer\PhotoViewer.dll", ImageView_Fullscreen ' + file
+#                print cl_str
+#                os.system(cl_str)
+#                from time import sleep
+#                sleep(1) # sleep for 1 second to let photo viewer spin up.
+#                         # otherwise windows might be out of order.
+
+            # okay, i don't like that last approach.  Trying something else
+            # copy preview files to a temp dir and point photo viewer to those.
+            temp_subdir = tempfile.mkdtemp(dir=self.temp_dir)
+            
+            for (index, src_path) in [item for item in enumerate(files_to_preview, start=1)][::-1]:
+                base, ext = os.path.splitext(src_path)
+                base = os.path.basename(base)
+                dest_path = os.path.join(temp_subdir, "{}({}){}".format(str(index).zfill(4), base, ext))
+                shutil.copy2(src_path, dest_path)
+            
+            cl_str = r'start rundll32.exe "%ProgramFiles%\Windows Photo Viewer\PhotoViewer.dll", ImageView_Fullscreen '
+            cl_str += dest_path
+             
+            os.system(cl_str)
+                
+        elif sys.platform == "darwin":
+            # MAC
+            files_to_preview = ["'{}'".format(os.path.join(self.list_data[index].id, self.list_data[index].filename)) for index in cursel]
+            print files_to_preview
+            cl_str = "open -a preview " + " ".join(files_to_preview)
+            print cl_str            
+            os.system(cl_str)
+        elif sys.playform == "linux2":
+            pass
+        
 
 root = Tk()
 root.title(APP_NAME)
