@@ -162,7 +162,7 @@ class PicTimelineApp(Frame):
         tmphandle, tmppath = tempfile.mkstemp(dir=self.temp_dir)
         self.fs_case_sensitive = not os.path.exists(tmppath.upper())
         try:
-            print tmppath                                                           
+            #print tmppath                                                           
             os.remove(tmppath)
         except:
             print 'Failed to remove tempfile: "{}"'.format(tmppath)
@@ -276,7 +276,7 @@ class PicTimelineApp(Frame):
         item_text = self.get_source_key(ndx_cursel)
 
         cur_data = self.sources_data[item_text]
-        dlg = TimeShiftDialog(self, cur_data.time_shift)
+        dlg = TimeShiftDialog(self, cur_data.time_shift, item_text)
         cur_data.time_shift = dlg.result 
         if dlg.result != None:
             if dlg.result != 0: # 0 is different from None!
@@ -292,7 +292,7 @@ class PicTimelineApp(Frame):
         ndx_cursel = int(self.listbox_output.curselection()[0])
         cur_item = self.list_data[ndx_cursel]
                 
-        dlg = DateTimeDialog(self, cur_item.dt, cur_item.is_overriden())
+        dlg = DateTimeDialog(self, cur_item)
         if dlg.result:
             if dlg.result == "clear":
                 del cur_item.dt

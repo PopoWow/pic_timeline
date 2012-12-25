@@ -10,9 +10,9 @@ class MyDialog(Dialog):
 #        Custom dialog that prompts for a timeshift value in seconds
 # -----------------------------------------------------------------------------        
 class TimeShiftDialog(MyDialog):
-    def __init__(self, master, init_value):
+    def __init__(self, master, init_value, title):
         self.init_value = str(init_value)
-        MyDialog.__init__(self, master)
+        MyDialog.__init__(self, master, title=title)
                 
     def body(self, master):
         self.result = None
@@ -38,10 +38,10 @@ class TimeShiftDialog(MyDialog):
 #        Custom dialog that prompts for a date/time value to set an item
 # -----------------------------------------------------------------------------
 class DateTimeDialog(MyDialog):
-    def __init__(self, master, init_dt, overriden=False):
-        self.init_dt = init_dt
-        self.overriden = overriden
-        MyDialog.__init__(self, master)
+    def __init__(self, master, init_item):
+        self.init_dt = init_item.dt
+        self.overriden = init_item.is_overriden()
+        MyDialog.__init__(self, master, title=init_item.filename)
         
     def body(self, master):
         self.result = None
