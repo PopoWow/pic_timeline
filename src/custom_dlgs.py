@@ -86,7 +86,7 @@ class DateTimeDialog(MyDialog):
                              variable=self.bv_clear)
         chkbox.grid(row=4, column=0, columnspan=5)        
 
-        #self.entry_month.select_range(0, END)
+        entry_month.select_range(0, END)
         entry_month.focus_set()
 
     def apply(self):

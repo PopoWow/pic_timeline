@@ -11,7 +11,11 @@ from tkMessageBox import showerror
 from datetime import datetime, timedelta
 from time import strptime, mktime
 from operator import attrgetter
+import ConfigParser
+import logging
+# third party modules
 import EXIF
+from appdirs import AppDirs
 
 from constants import *
 from custom_dlgs import TimeShiftDialog, DateTimeDialog
@@ -19,12 +23,33 @@ from custom_dlgs import TimeShiftDialog, DateTimeDialog
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------        
-APP_NAME = "Picture Timeliner"
+APP_GUID = "{75a56efb-b786-424f-b6a3-9649a5d22a83}" # Not used anymore
+TEMP_DIR = "temp"
+# Tkinter
+ALL = N+S+W+E
+WIDTH = W+E
 MIN_WIDTH = 480
 MIN_HEIGHT = 360
 DEF_SIZE = "640x480"
 COLS = 5
-APP_GUID = "{75a56efb-b786-424f-b6a3-9649a5d22a83}"
+# appdirs
+APP_NAME = "Picture Timeliner"
+DEVELOPER_NAME = "kylekawa"
+# ConfigParser
+INI_FILENAME    = "pictime.ini"
+SECT_SETTINGS   = "SETTINGS"
+OPT_ASKDIRPATH  = "OPT_ASKDIRPATH"
+# Logging
+LOG_FILE = "pictime.log"
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+#DEF_LEVEL = 'warning'
+DEF_LEVEL = 'info'
+LEVELS = {'debug'   : logging.DEBUG,
+          'info'    : logging.INFO,
+          'warning' : logging.WARNING,
+          'error'   : logging.ERROR,
+          'critical': logging.CRITICAL
+         }
 
 # -----------------------------------------------------------------------------
 # class TimeShiftDialog
@@ -134,27 +159,29 @@ class PicTimelineApp(Frame):
         self.sources_data = {}
         self.list_data = []
         
-        # create our temp folder in the temp dir.  clear it out every session
-        if sys.platform == "win32":
-            # having problems launching the photoviewer for images staged in
-            # %TEMP%.  Falling back to APPDATA...
-            tempdir = os.environ['APPDATA']
-        else:
-            tempdir = tempfile.gettempdir()
-            
-        self.temp_dir = os.path.join(tempdir, 'KyleKawa', APP_GUID)
+        # use appdirs to get machine specific path to appdata
+        dirs = AppDirs(APP_NAME, DEVELOPER_NAME)
+        self.appdata_dir = dirs.user_data_dir
+        logging.basicConfig(filename=os.path.join(self.appdata_dir, LOG_FILE),
+                            level=LEVELS[DEF_LEVEL],
+                            format=LOG_FORMAT)
+        logging.critical("Session started.") # always
 
-        if os.path.exists(self.temp_dir) and not os.path.isdir(self.temp_dir):
-            shutil.rmtree(self.temp_dir)
+        self.temp_dir = os.path.join(self.appdata_dir, TEMP_DIR)
+        logging.info('app data dir: "{}"'.format(self.appdata_dir))        
+
         if not os.path.exists(self.temp_dir):
-            os.makedirs(self.temp_dir)
+            os.makedirs(self.temp_dir) # by default this makes the app dirs too.
+            logging.info('Creating temp dir: "{}"'.format(self.temp_dir))
         else:
-            # get contents of temp_dir
+            logging.info('Emptying temp dir: "{}"'.format(self.temp_dir))
+            # get contents of temp_dir and clear it out
             (dirpath, tmp_dirs, tmp_files) = next(os.walk(self.temp_dir))
             # delete files
             map(os.unlink, [os.path.join(dirpath, file) for file in tmp_files])
             # delete dirs
             map(shutil.rmtree, [os.path.join(dirpath, dir) for dir in tmp_dirs])
+        
         
         # check file system case sensitivity
         # By default mkstemp() creates a file with a name that begins with 'tmp' (lowercase)
@@ -165,12 +192,35 @@ class PicTimelineApp(Frame):
             #print tmppath                                                           
             os.remove(tmppath)
         except:
-            print 'Failed to remove tempfile: "{}"'.format(tmppath)
+            logging.error('Failed to remove tempfile: "{}"'.format(tmppath))
+            
+        # read in configuration data
+        self.ini_parser = ConfigParser.RawConfigParser()
+        ini_file = os.path.join(self.appdata_dir, INI_FILENAME)
+        self.ini_parser.read(ini_file)
+        
+        # make sure that config info has required sections and options
+        if not self.ini_parser.has_section(SECT_SETTINGS):
+            self.ini_parser.add_section(SECT_SETTINGS)
+        if not self.ini_parser.has_option(SECT_SETTINGS, OPT_ASKDIRPATH):
+            self.ini_parser.set(SECT_SETTINGS, OPT_ASKDIRPATH, os.path.expanduser("~"))
+
+        # write it out to ensure that it exists
+        self.write_ini_file()
+        
+        logging.info('askdirpath="{}"'.format(self.ini_parser.get(SECT_SETTINGS, OPT_ASKDIRPATH)))
         
         self.configure_widgets()
 
+    def write_ini_file(self):
+        # this could be problematic if there are multiple instances running...
+        ini_file = os.path.join(self.appdata_dir, INI_FILENAME)
+        with open(ini_file, "w") as fp_ini_file:
+            self.ini_parser.write(fp_ini_file)
+        logging.info('Wrote ini file: "{}"'.format(ini_file))
+
     def configure_widgets(self):
-        """definte and lay out tkinter widgets
+        """define and lay out tkinter widgets
         """        
         self.master.rowconfigure(0, weight=1)
         self.master.columnconfigure(0, weight=1)
@@ -221,36 +271,46 @@ class PicTimelineApp(Frame):
         return item_key
     
     def handle_add_source(self):
-        new_source_dir = askdirectory()
-        
-        if self.fs_case_sensitive:
-            ok = new_source_dir not in self.listbox_sources.get(0, END)
-        else:
-            ok = new_source_dir.lower() not in [x.lower() for x in self.listbox_sources.get(0, END)]
-        
-        if ok:
-            jpeg_files = [x for x in os.listdir(new_source_dir) if os.path.splitext(x)[1].lower() in [".jpg", ".jpeg"]]
-            if jpeg_files:
-                #directory is new(ok) and has some jpgs in it so add it
-                self.listbox_sources.insert(END, new_source_dir)
-                new_data = self.SourceListData()
-                self.sources_data[new_source_dir] = new_data
-                self.listbox_sources.itemconfig(END, new_data.color)
-                
-                self.process_new_source(new_source_dir, jpeg_files)
-
-                self.listbox_sources.activate(END)
-                self.listbox_sources.focus_set()
+        new_source_dir = askdirectory(initialdir=self.ini_parser.get(SECT_SETTINGS, OPT_ASKDIRPATH))        
+        if new_source_dir:        
+            if self.fs_case_sensitive:
+                ok = new_source_dir not in self.listbox_sources.get(0, END)
             else:
-                showerror(title="Source selection error", message='"{}" does not contain any JPG images'.format(new_source_dir))
-        else:
-            showerror(title="Source selection error", message='"{}" already added as source'.format(new_source_dir))
+                ok = new_source_dir.lower() not in [x.lower() for x in self.listbox_sources.get(0, END)]
+            
+            if ok:
+                jpeg_files = [x for x in os.listdir(new_source_dir) if os.path.splitext(x)[1].lower() in [".jpg", ".jpeg"]]
+                if jpeg_files:
+                    #directory is new(ok) and has some jpgs in it so add it
+                    self.listbox_sources.insert(END, new_source_dir)
+                    new_data = self.SourceListData()
+                    self.sources_data[new_source_dir] = new_data
+                    self.listbox_sources.itemconfig(END, new_data.color)
+                    
+                    self.process_new_source(new_source_dir, jpeg_files)
+    
+                    self.listbox_sources.activate(END)
+                    self.listbox_sources.focus_set()
+                    
+                    # go up one level in path
+                    up_one_level = os.path.split(new_source_dir)[0]
+                    if (os.path.isdir(up_one_level) and 
+                        up_one_level != self.ini_parser.get(SECT_SETTINGS, OPT_ASKDIRPATH)):
+                        self.ini_parser.set(SECT_SETTINGS, OPT_ASKDIRPATH, up_one_level)
+                        self.write_ini_file()
+                else:
+                    logging.warn("Directory selection does not contain any JPG images")
+                    showerror(title="Source selection error", message='"{}" does not contain any JPG images'.format(new_source_dir))
+            else:
+                logging.warn("Directory selection alread exists as a source")
+                showerror(title="Source selection error", message='"{}" already added as source'.format(new_source_dir))
 
     def handle_delete_source(self):
         cursel = self.listbox_sources.curselection()
         if cursel:
             index = int(cursel[0])
             key = self.get_source_key(index)
+            logging.info('Deleting source: "{}"'.format(key))
             
             # delete listbox item
             self.listbox_sources.delete(index)
@@ -263,8 +323,6 @@ class PicTimelineApp(Frame):
             
             # delete item data corresponding to removed source
             del self.sources_data[key]
-            #verify deletion
-            print self.sources_data
             
             # update the outputs listbox and remove all files from the
             # deleted source
@@ -277,8 +335,10 @@ class PicTimelineApp(Frame):
 
         cur_data = self.sources_data[item_text]
         dlg = TimeShiftDialog(self, cur_data.time_shift, item_text)
-        cur_data.time_shift = dlg.result 
+        cur_data.time_shift = dlg.result
         if dlg.result != None:
+            logging.info('"{}" time shifted to {}'.format(item_text, dlg.result))
+            
             if dlg.result != 0: # 0 is different from None!
                 item_text = "{}:{}".format(dlg.result, item_text)        
         
@@ -296,8 +356,11 @@ class PicTimelineApp(Frame):
         if dlg.result:
             if dlg.result == "clear":
                 del cur_item.dt
+                logging.info('"{}" reverting to original time: {}'.format(cur_item.filename, cur_item.dt))
             else:
                 cur_item.dt = dlg.result
+                logging.info('"{}" overriden to: {}'.format(cur_item.filename, cur_item.dt))
+            
 
             # try to be smart about the resort.  figure out where the
             # changed item will be moved and move it.  even if it doesn't
@@ -306,9 +369,9 @@ class PicTimelineApp(Frame):
             ndx_sort = self.list_data.index(cur_item) # find out where item was moved
             if ndx_cursel != ndx_sort:
                 # item was moved
-                print "item moved from {} to {}".format(ndx_cursel, ndx_sort)
+                logging.info("item moved from {} to {}".format(ndx_cursel, ndx_sort))
             else:
-                print "item remains at {}".format(ndx_cursel)
+                logging.info("item remains at {}".format(ndx_cursel))
                 
             self.listbox_output.delete(ndx_cursel)
             self.listbox_output.insert(ndx_sort, cur_item)
@@ -316,12 +379,15 @@ class PicTimelineApp(Frame):
 
     def handle_set_output_path(self):
         new_source_dir = askdirectory()
-        self.text_path.delete(1.0, END)
-        self.text_path.insert(END, new_source_dir)
+        if new_source_dir:
+            logging.info('Output directory set to: "{}"'.format(new_source_dir))
+            self.text_path.delete(1.0, END)
+            self.text_path.insert(END, new_source_dir)
     
     def process_new_source(self, new_source_dir, jpeg_files):
         if not os.path.isdir(new_source_dir):
             # Should be able to get here but anyhoo
+            logging.error('Invalid source directory: "{}"'.format(new_source_dir))
             raise ValueError("Input path is not a directory")
                         
         for file in jpeg_files:
@@ -351,12 +417,15 @@ class PicTimelineApp(Frame):
         output_path = self.text_path.get(1.0, END).strip()
         prefix = self.file_prefix.get()
         if not output_path:
+            logging.warn('Output path is not set.')
             showerror(title="Output path error", message='Enter a path for the output files')
             self.handle_set_output_path()
         elif not prefix:
+            logging.warn('Output file prefix is not set.')
             showerror(title="Output prefix error", message='Enter a prefix for the output files')
             self.file_prefix.focus_set()
         elif not self.list_data:
+            logging.warn('No files specified for output.')
             showerror(title="No files to output", message='No files to process')
         else:
             # calculate how many digits needed to display all images
@@ -380,6 +449,8 @@ class PicTimelineApp(Frame):
             # Open multiple instances in reverse order?
             files_to_preview = [os.path.normpath(os.path.join(self.list_data[index].id, self.list_data[index].filename))
                                 for index in cursel]
+            logging.debug('Files to preview: {}'.format(files_to_preview))
+            
 #            
 #            for file in files_to_preview:
 #                cl_str = r'start rundll32.exe "%ProgramFiles%\Windows Photo Viewer\PhotoViewer.dll", ImageView_Fullscreen ' + file
@@ -391,30 +462,41 @@ class PicTimelineApp(Frame):
 
             # okay, i don't like that last approach.  Trying something else
             # copy preview files to a temp dir and point photo viewer to those.
-            temp_subdir = tempfile.mkdtemp(dir=self.temp_dir)
+            temp_subdir = os.path.normpath(tempfile.mkdtemp(dir=self.temp_dir))
+            logging.info('Preview staging directory: "{}"'.format(temp_subdir))
             
             for (index, src_path) in [item for item in enumerate(files_to_preview, start=1)][::-1]:
                 base, ext = os.path.splitext(src_path)
                 base = os.path.basename(base)
                 dest_path = os.path.join(temp_subdir, "{}({}){}".format(str(index).zfill(4), base, ext))
+                #os.link(src_path, dest_path) doesn't do squat
                 shutil.copy2(src_path, dest_path)
             
             cl_str = r'start rundll32.exe "%ProgramFiles%\Windows Photo Viewer\PhotoViewer.dll", ImageView_Fullscreen '
             cl_str += dest_path
-             
+            logging.info('Preview app: "{}"'.format(cl_str))
+            os.system(cl_str)
+            
+            cl_str = r'explorer.exe /root,' + temp_subdir
+            logging.info('Preview explorer: "{}"'.format(cl_str))
             os.system(cl_str)
                 
         elif sys.platform == "darwin":
             # MAC
             files_to_preview = ["'{}'".format(os.path.join(self.list_data[index].id, self.list_data[index].filename)) for index in cursel]
-            print files_to_preview
+            logging.debug('Files to preview: {}'.format(files_to_preview))
+            
             cl_str = "open -a preview " + " ".join(files_to_preview)
-            print cl_str            
+            logging.info('Preview app: "{}"'.format(cl_str))
             os.system(cl_str)
+            
         elif sys.playform == "linux2":
-            pass
+            # Not sure what to do here.  I don't have access to a linux box.
+            # I guess I could just copy the preview files to a temp dir like
+            # Windows but leave for now.
+            logging.warn('Linux preview not implemented')
+            showerror(title="Preview Error", message="Linux preview not implemented")
         
-
 root = Tk()
 root.title(APP_NAME)
 root.minsize(MIN_WIDTH, MIN_HEIGHT)
