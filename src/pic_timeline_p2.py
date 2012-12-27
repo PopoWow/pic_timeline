@@ -42,8 +42,8 @@ OPT_ASKDIRPATH  = "OPT_ASKDIRPATH"
 # Logging
 LOG_FILE = "pictime.log"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-#DEF_LEVEL = 'warning'
-DEF_LEVEL = 'info'
+DEF_LEVEL = 'warning'
+#DEF_LEVEL = 'info'
 LEVELS = {'debug'   : logging.DEBUG,
           'info'    : logging.INFO,
           'warning' : logging.WARNING,
