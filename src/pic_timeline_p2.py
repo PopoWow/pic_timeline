@@ -250,18 +250,23 @@ class PicTimelineApp(Frame):
         
         Button(self, text="Go!", command=self.handle_do_the_thing).grid(row=7, column=0, columnspan=2, sticky=WIDTH)
         
+        # create subframe used for output section
         sub_frame = Frame(self, bg="red")
         sub_frame.rowconfigure(1, weight=1)
         sub_frame.columnconfigure(0, weight=1)
+        sub_frame.columnconfigure(1, weight=1)
         sub_frame.grid(row=0, column=2, rowspan=9, columnspan=3, sticky=ALL)
         
-        Label(sub_frame, text="Proposed Order").grid(row=0, column=0, sticky=WIDTH)
+        Label(sub_frame, text="Proposed Order").grid(row=0, column=0, columnspan=2, sticky=WIDTH)
         self.listbox_output = Listbox(sub_frame, selectmode=EXTENDED)
-        self.listbox_output.grid(row=1, column=0, sticky=ALL)
+        self.listbox_output.grid(row=1, column=0, columnspan=2, sticky=ALL)
         self.listbox_output.bind("<Double-Button-1>", func=self.on_double_click_output)
         Button(sub_frame,
+               text="Select All",
+               command=self.handle_select_all).grid(row=2, column=0, sticky=WIDTH)
+        Button(sub_frame,
                text="Preview",
-               command=self.handle_preview).grid(row=2, column=0, sticky=WIDTH)
+               command=self.handle_preview).grid(row=2, column=1, sticky=WIDTH)
     
     def get_source_key(self, ndx_sel):
         item_key = self.listbox_sources.get(ndx_sel)
@@ -439,6 +444,9 @@ class PicTimelineApp(Frame):
                 shutil.copy2(src_path, dest_path)
                 
                 #print file, dest_path
+    
+    def handle_select_all(self):
+        self.listbox_output.selection_set(0, END)
     
     def handle_preview(self):
         # indexes come back as strs... d'oh!
