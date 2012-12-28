@@ -1,13 +1,50 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#
 
+"""
+Application: Picture Timeliner (pic_timeline_p2.py)
+
+Backstory: Nowadays, everything is a camera.  When I get back from a trip
+I'll have pictures from several cameras as well as items that I scan in
+manually.  Here's the problem: I like being able to look at the photos
+in chronological order to relive my vacation glory but how can you do
+that easily?  Sorting by modified time or EXIF metadata sounds good but
+that assumes that all sources are time-synchronized.  Remember, phones
+and tablets sync probably sync with local TZ, cameras don't...  scans have
+no correlation to when the source was taken... and "what?  My sister's
+point and shoot camera was set 45 minutes late?  Arggh!"
+
+This application attempts to fix this by allowing you to specify multiple
+sources of photos and optionally time-shift the source to account for
+any discrepancies.  Once images are imported from these sources you can
+manually override individual photos with specific datetimes in case
+a mere time-shift doesn't help (ex. scanned images).  You can preview
+the proposed output order at any time.  On Mac, it uses the preview
+app which is very convenient.  On Windows, the photos are copied to a
+temp folder so that the app can specify the order which can then be
+assessed using PhotoViewer or explorer.  No preview is available for
+Linux at the moment (I don't have access to a Linux box to test).
+Once the order is okay, specify an output file prefix (ex. "VACAY2012_")
+and the output directory and then go!  You now have all your photos
+reordered sequentially according to filename.  The files are not
+changed at all except for the name.
+
+HINTS:
+ - Add sources that will need extensive datetime overrides first.
+ - If working with many photos and you need to override datetime
+   values, use Finder/Explorer to get a general idea of a time
+   range to work with, then use the preview around where the
+   file is inserted.
+ - Time shifting a source can be tricky to get right so should
+   be considered a last resort.  Ideally, synchronize your
+   cameras before the event!
+"""
 import os
 import tempfile
 import shutil
 from Tkinter import *
 from tkFileDialog import askdirectory
-from tkMessageBox import showerror
+from tkMessageBox import showerror, askyesno
 from datetime import datetime, timedelta
 from time import strptime, mktime
 from operator import attrgetter
@@ -16,8 +53,7 @@ import logging
 # third party modules
 import EXIF
 from appdirs import AppDirs
-
-from constants import *
+# my support modules
 from custom_dlgs import TimeShiftDialog, DateTimeDialog
 
 # -----------------------------------------------------------------------------
@@ -64,13 +100,19 @@ class PicTimelineApp(Frame):
     class SourceListData(object):
         """Stores the time shift and color data for a source item."""
         
+        # Queue of color combinations to use.  As a source is added, the first
+        # combo is popped and used for that source.  If that source is later
+        # deleted, then the colorcombo is pushed back for reuse.  If an
+        # item to process is datetime overriden then the color combo inverts
+        # (white on color).  If all the color combos are used up, default
+        # to black/white.
         colors = [{'fg':'red', 'bg':'white'}, {'fg':'green', 'bg':'white'},
                   {'fg':'blue', 'bg':'white'}, {'fg':'cyan', 'bg':'white'},
                   {'fg':'magenta', 'bg':'white'}, {'fg':'yellow', 'bg':'white'}]
         DEFAULT_COLORS = {'fg':'black', 'bg':'white'}
         
         def __init__(self):
-            self.time_shift = 0
+            self.time_shift = timedelta()
             
             # pop first item out of colors list and assign it to this source
             # if this source is deleted, then it's pushed back onto the list.
@@ -129,7 +171,7 @@ class PicTimelineApp(Frame):
                 return self._dt_override
             else:
                 # not overriden.  use original datetime with any shift value available
-                retval = self._dt + timedelta(seconds=self.data.time_shift)
+                retval = self._dt + self.data.time_shift
             return retval
         
         @dt.setter
@@ -162,10 +204,13 @@ class PicTimelineApp(Frame):
         # use appdirs to get machine specific path to appdata
         dirs = AppDirs(APP_NAME, DEVELOPER_NAME)
         self.appdata_dir = dirs.user_data_dir
+        print "App data dir: " + self.appdata_dir
+        
+        # initiliaze logging
         logging.basicConfig(filename=os.path.join(self.appdata_dir, LOG_FILE),
                             level=LEVELS[DEF_LEVEL],
                             format=LOG_FORMAT)
-        logging.critical("Session started.") # always
+        logging.critical("Session started.") # always log
 
         self.temp_dir = os.path.join(self.appdata_dir, TEMP_DIR)
         logging.info('app data dir: "{}"'.format(self.appdata_dir))        
@@ -174,22 +219,16 @@ class PicTimelineApp(Frame):
             os.makedirs(self.temp_dir) # by default this makes the app dirs too.
             logging.info('Creating temp dir: "{}"'.format(self.temp_dir))
         else:
-            logging.info('Emptying temp dir: "{}"'.format(self.temp_dir))
-            # get contents of temp_dir and clear it out
-            (dirpath, tmp_dirs, tmp_files) = next(os.walk(self.temp_dir))
-            # delete files
-            map(os.unlink, [os.path.join(dirpath, file) for file in tmp_files])
-            # delete dirs
-            map(shutil.rmtree, [os.path.join(dirpath, dir) for dir in tmp_dirs])
-        
+            self.clean_up_temp_dir()
         
         # check file system case sensitivity
         # By default mkstemp() creates a file with a name that begins with 'tmp' (lowercase)
         # macos/windows do not seem to be case sensitive
         tmphandle, tmppath = tempfile.mkstemp(dir=self.temp_dir)
+        with os.fdopen(tmphandle, "w"):
+            pass
         self.fs_case_sensitive = not os.path.exists(tmppath.upper())
-        try:
-            #print tmppath                                                           
+        try:            
             os.remove(tmppath)
         except:
             logging.error('Failed to remove tempfile: "{}"'.format(tmppath))
@@ -211,6 +250,22 @@ class PicTimelineApp(Frame):
         logging.info('askdirpath="{}"'.format(self.ini_parser.get(SECT_SETTINGS, OPT_ASKDIRPATH)))
         
         self.configure_widgets()
+
+    def on_window_delete(self):
+        # clean up temp files before exitting
+        self.clean_up_temp_dir()
+        
+        self.master.destroy()
+        
+    def clean_up_temp_dir(self):
+        logging.info('Emptying temp dir: "{}"'.format(self.temp_dir))
+        # get contents of temp_dir and clear it out
+        (dirpath, tmp_dirs, tmp_files) = next(os.walk(self.temp_dir))
+        # delete files
+        map(os.unlink, [os.path.join(dirpath, file) for file in tmp_files])
+        # delete dirs
+        map(shutil.rmtree, [os.path.join(dirpath, dir) for dir in tmp_dirs])
+        
 
     def write_ini_file(self):
         # this could be problematic if there are multiple instances running...
@@ -270,7 +325,7 @@ class PicTimelineApp(Frame):
     
     def get_source_key(self, ndx_sel):
         item_key = self.listbox_sources.get(ndx_sel)
-        ndx_sep = item_key.find(":")
+        ndx_sep = item_key.find("|")
         if ndx_sep != -1:
             item_key = item_key[ndx_sep+1:]
         return item_key
@@ -340,13 +395,15 @@ class PicTimelineApp(Frame):
 
         cur_data = self.sources_data[item_text]
         dlg = TimeShiftDialog(self, cur_data.time_shift, item_text)
-        cur_data.time_shift = dlg.result
-        if dlg.result != None:
-            logging.info('"{}" time shifted to {}'.format(item_text, dlg.result))
-            
-            if dlg.result != 0: # 0 is different from None!
-                item_text = "{}:{}".format(dlg.result, item_text)        
-        
+        if dlg.result != None: # None is a cancel
+            cur_data.time_shift = dlg.result
+            if cur_data.time_shift.total_seconds() == 0.0:
+                # time shift was cleared!
+                logging.info('"{}" time shift was reset'.format(item_text, dlg.result))
+            else:
+                logging.info('"{}" time shifted {}'.format(item_text, cur_data.time_shift))
+                item_text = "{}|{}".format(cur_data.time_shift, item_text)
+                    
             self.listbox_sources.insert(ndx_cursel, item_text)
             self.listbox_sources.itemconfig(ndx_cursel, cur_data.color)
             self.listbox_sources.delete(ndx_cursel+1)
@@ -433,17 +490,25 @@ class PicTimelineApp(Frame):
             logging.warn('No files specified for output.')
             showerror(title="No files to output", message='No files to process')
         else:
-            # calculate how many digits needed to display all images
-            index_width = len(str(len(self.list_data)))
-
-            for ndx, src_path in enumerate([os.path.join(cur_item.id, cur_item.filename)
-                                        for cur_item in self.list_data], 1):
-                dest_path = os.path.join(output_path, "{}{}.jpg".format(prefix, str(ndx).zfill(index_width)))
+            ok = True
+            jpeg_files = [x for x in os.listdir(output_path) if os.path.splitext(x)[1].lower() in [".jpg", ".jpeg"]]
+            if jpeg_files:
+                logging.warn('No files specified for output.')
+                ok = askyesno(title="Output path contains files",
+                              message='"{}" already contains image files.  Do you wish to continue?'.format(output_path))
                 
-                # use copy2 to preserve metadata
-                shutil.copy2(src_path, dest_path)
-                
-                #print file, dest_path
+            if ok:
+                # calculate how many digits needed to display all images
+                index_width = len(str(len(self.list_data)))
+    
+                for ndx, src_path in enumerate([os.path.join(cur_item.id, cur_item.filename)
+                                            for cur_item in self.list_data], 1):
+                    dest_path = os.path.join(output_path, "{}{}.jpg".format(prefix, str(ndx).zfill(index_width)))
+                    
+                    # use copy2 to preserve metadata
+                    shutil.copy2(src_path, dest_path)
+                    
+                    #print file, dest_path
     
     def handle_select_all(self):
         self.listbox_output.selection_set(0, END)
@@ -490,7 +555,7 @@ class PicTimelineApp(Frame):
             os.system(cl_str)
                 
         elif sys.platform == "darwin":
-            # MAC
+            # MAC.  As far as maxlen for command line, "getconf ARG_MAX" is returning: 262144
             files_to_preview = ["'{}'".format(os.path.join(self.list_data[index].id, self.list_data[index].filename)) for index in cursel]
             logging.debug('Files to preview: {}'.format(files_to_preview))
             
@@ -510,4 +575,5 @@ root.title(APP_NAME)
 root.minsize(MIN_WIDTH, MIN_HEIGHT)
 root.geometry(DEF_SIZE)
 app = PicTimelineApp(master=root)
+root.protocol(name="WM_DELETE_WINDOW", func=app.on_window_delete)
 app.mainloop()

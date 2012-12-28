@@ -1,6 +1,6 @@
 from Tkinter import *
 from tkSimpleDialog import Dialog
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class MyDialog(Dialog):
     pass
@@ -11,27 +11,51 @@ class MyDialog(Dialog):
 # -----------------------------------------------------------------------------        
 class TimeShiftDialog(MyDialog):
     def __init__(self, master, init_value, title):
-        self.init_value = str(init_value)
+        self.init_value = init_value
         MyDialog.__init__(self, master, title=title)
                 
     def body(self, master):
         self.result = None
         
-        Label(master, text="Enter shift value in seconds (ex: 500, -300").grid(row=0, column=0)
+        Label(master, text="Days:").grid(row=0, column=0)
+        Label(master, text="Hours:").grid(row=0, column=1)
+        Label(master, text="Minutes:").grid(row=2, column=0)
+        Label(master, text="Seconds:").grid(row=2, column=1)
         
-        self.entry_value = Entry(master)
-        self.entry_value.insert(0, self.init_value)
-        self.entry_value.grid(row=1, column=0)
+        self.entry_days = Entry(master, width=4)
+        self.entry_days.grid(row=1, column=0)
+        self.entry_days.insert(0, str(self.init_value.days))
         
-        self.entry_value.select_range(0, END)
-        self.entry_value.focus_set()
+        delta_seconds = self.init_value.seconds
+        hours = delta_seconds / 3600
+        delta_seconds %= 3600
+        minutes = delta_seconds / 60
+        delta_seconds %= 60
+        seconds = delta_seconds
+        self.entry_hours = Entry(master, width=4)
+        self.entry_hours.grid(row=1, column=1)
+        self.entry_hours.insert(0, str(hours))
+
+        self.entry_mins = Entry(master, width=4)
+        self.entry_mins.grid(row=3, column=0)
+        self.entry_mins.insert(0, str(minutes))
+
+        self.entry_secs = Entry(master, width=4)
+        self.entry_secs.grid(row=3, column=1)
+        self.entry_secs.insert(0, str(seconds))
+
+        self.entry_days.select_range(0, END)
+        self.entry_days.focus_set()
         
     def apply(self):
-        str_shift_val = self.entry_value.get()
-        new_shift = int(str_shift_val) if str_shift_val else 0 
+        days = int(self.entry_days.get()) if self.entry_days.get() else 0
+        hours = int(self.entry_hours.get()) if self.entry_hours.get() else 0
+        minutes = int(self.entry_mins.get()) if self.entry_mins.get() else 0
+        seconds = int(self.entry_secs.get()) if self.entry_secs.get() else 0
+        delta = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
         
-        print "new time shift:", new_shift
-        self.result = new_shift
+        print "new time shift:", repr(delta)
+        self.result = delta
         
 # -----------------------------------------------------------------------------
 # class DateTimeDialog
