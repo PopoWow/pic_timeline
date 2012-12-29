@@ -93,10 +93,11 @@ from custom_dlgs import TimeShiftDialog, DateTimeDialog
 APP_GUID = "{75a56efb-b786-424f-b6a3-9649a5d22a83}" # Not used anymore
 TEMP_DIR = "temp"
 # Tkinter
-ALL = N+S+W+E
+HEIGHT = N+S
 WIDTH = W+E
+ALL = HEIGHT+WIDTH
 MIN_WIDTH = 480
-MIN_HEIGHT = 360
+MIN_HEIGHT = 400
 DEF_SIZE = "640x480"
 COLS = 5
 # appdirs
@@ -330,7 +331,7 @@ class PicTimelineApp(Frame):
         Button(self, text="Delete Source", command=self.handle_delete_source).grid(row=2, column=1, sticky=WIDTH)
         
         Button(self, text="Set Output Path", command=self.handle_set_output_path).grid(row=3, column=0, columnspan=2, sticky=WIDTH)
-        self.text_path = Text(self, width=20, height=2)
+        self.text_path = Text(self, width=20, height=2, relief=RIDGE, borderwidth=1)
         self.text_path.grid(row=4, column=0, columnspan=2, sticky=WIDTH)
         
         Label(self, text="Set Output File Prefix:").grid(row=5, column=0, columnspan=2, sticky=WIDTH)
@@ -339,16 +340,27 @@ class PicTimelineApp(Frame):
         
         Button(self, text="Go!", command=self.handle_do_the_thing).grid(row=7, column=0, columnspan=2, sticky=WIDTH)
         
+        status_bar = Label(self, text="(c) 2012 Kyle Kawamura", font=("Helvetica", 10))
+        status_bar.grid(row=9, column=0, columnspan=5, sticky=WIDTH)
+        
         # create subframe used for output section
-        sub_frame = Frame(self, bg="red")
+        sub_frame = Frame(self)
         sub_frame.rowconfigure(1, weight=1)
         sub_frame.columnconfigure(0, weight=1)
         sub_frame.columnconfigure(1, weight=1)
         sub_frame.grid(row=0, column=2, rowspan=9, columnspan=3, sticky=ALL)
         
         Label(sub_frame, text="Proposed Order").grid(row=0, column=0, columnspan=2, sticky=WIDTH)
-        self.listbox_output = Listbox(sub_frame, selectmode=EXTENDED)
-        self.listbox_output.grid(row=1, column=0, columnspan=2, sticky=ALL)
+        
+        listbox_frame = Frame(sub_frame)
+        listbox_frame.rowconfigure(0, weight=1)
+        listbox_frame.columnconfigure(0, weight=1)
+        listbox_frame.grid(row=1, column=0, columnspan=2, sticky=ALL)
+        scrollbar = Scrollbar(listbox_frame, orient=VERTICAL)
+        scrollbar.grid(row=0, column=1, sticky=HEIGHT)
+        self.listbox_output = Listbox(listbox_frame, selectmode=EXTENDED, yscrollcommand=scrollbar.set)
+        scrollbar.config(command=self.listbox_output.yview)
+        self.listbox_output.grid(row=0, column=0, sticky=ALL)
         self.listbox_output.bind("<Double-Button-1>", func=self.on_double_click_output)
         Button(sub_frame,
                text="Select All",
