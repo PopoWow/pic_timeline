@@ -1,44 +1,52 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+#
+# Backstory: Nowadays, everything is a camera.  When I get back from a trip
+# I'll have pictures from several cameras as well as items that I scan in
+# manually.  Here's the problem: I like being able to look at the photos
+# in chronological order to relive my vacation glory but how can you do
+# that easily?  Sorting by modified time or EXIF metadata sounds good but
+# that assumes that all sources are time-synchronized.  Remember, phones
+# and tablets sync probably sync with local TZ, cameras don't...  scans have
+# no correlation to when the source was taken... and "what?  My sister's
+# point and shoot camera was set 45 minutes late?  Arggh!"
+#
+# This application attempts to fix this by allowing you to specify multiple
+# sources of photos and optionally time-shift the source to account for
+# any discrepancies.  Once images are imported from these sources you can
+# manually override individual photos with specific datetimes in case
+# a mere time-shift doesn't help (ex. scanned images).  You can preview
+# the proposed output order at any time.  On Mac, it uses the preview
+# app which is very convenient.  On Windows, the photos are copied to a
+# temp folder so that the app can specify the order which can then be
+# assessed using PhotoViewer or explorer.  No preview is available for
+# Linux at the moment (I don't have access to a Linux box to test).
+# Once the order is okay, specify an output file prefix (ex. "Honeymoon_")
+# and the output directory and then go!  You now have all your photos    
+# reordered sequentially according to filename.  The files are not
+# changed at all except for the name.
+#
+# HINTS:
+#  - Add sources that will need extensive datetime overrides first.
+#  - If working with many photos and you need to override datetime
+#    values, use Finder/Explorer to get a general idea of a time
+#    range to work with, then use the preview around where the file
+#    is inserted.
+#  - Time shifting a source can be tricky to get right so should be
+#    considered a last resort.  Ideally, synchronize your cameras
+#    before the event!
 
 """
 Application: Picture Timeliner (pic_timeline_p2.py)
 
-Backstory: Nowadays, everything is a camera.  When I get back from a trip
-I'll have pictures from several cameras as well as items that I scan in
-manually.  Here's the problem: I like being able to look at the photos
-in chronological order to relive my vacation glory but how can you do
-that easily?  Sorting by modified time or EXIF metadata sounds good but
-that assumes that all sources are time-synchronized.  Remember, phones
-and tablets sync probably sync with local TZ, cameras don't...  scans have
-no correlation to when the source was taken... and "what?  My sister's
-point and shoot camera was set 45 minutes late?  Arggh!"
-
-This application attempts to fix this by allowing you to specify multiple
-sources of photos and optionally time-shift the source to account for
-any discrepancies.  Once images are imported from these sources you can
-manually override individual photos with specific datetimes in case
-a mere time-shift doesn't help (ex. scanned images).  You can preview
-the proposed output order at any time.  On Mac, it uses the preview
-app which is very convenient.  On Windows, the photos are copied to a
-temp folder so that the app can specify the order which can then be
-assessed using PhotoViewer or explorer.  No preview is available for
-Linux at the moment (I don't have access to a Linux box to test).
-Once the order is okay, specify an output file prefix (ex. "VACAY2012_")
-and the output directory and then go!  You now have all your photos
-reordered sequentially according to filename.  The files are not
-changed at all except for the name.
-
-HINTS:
- - Add sources that will need extensive datetime overrides first.
- - If working with many photos and you need to override datetime
-   values, use Finder/Explorer to get a general idea of a time
-   range to work with, then use the preview around where the
-   file is inserted.
- - Time shifting a source can be tricky to get right so should
-   be considered a last resort.  Ideally, synchronize your
-   cameras before the event!
+ - Add sources.  Double click source to enter timeshift information.
+ - Override photo's time information by double clicking photos (optional)
+ - Use preview feature to verify output order
+ - Select output directory
+ - Specify photo set's prefix
+ - Go!
 """
+
 import os
 import tempfile
 import shutil
@@ -106,9 +114,12 @@ class PicTimelineApp(Frame):
         # item to process is datetime overriden then the color combo inverts
         # (white on color).  If all the color combos are used up, default
         # to black/white.
-        colors = [{'fg':'red', 'bg':'white'}, {'fg':'green', 'bg':'white'},
-                  {'fg':'blue', 'bg':'white'}, {'fg':'cyan', 'bg':'white'},
-                  {'fg':'magenta', 'bg':'white'}, {'fg':'yellow', 'bg':'white'}]
+        colors = [{'fg':'red', 'bg':'white'}, {'fg':'forestgreen', 'bg':'white'},
+                  {'fg':'blue', 'bg':'white'}, {'fg':'brown', 'bg':'white'},
+                  {'fg':'magenta', 'bg':'white'}, {'fg':'gold', 'bg':'white'},
+                  {'fg':'cyan', 'bg':'white'}, {'fg':'greenyellow', 'bg':'white'},
+                  {'fg':'coral', 'bg':'white'}, {'fg':'orange', 'bg':'white'},
+                  {'fg':'yellow', 'bg':'white'}, {'fg':'gray', 'bg':'white'}]
         DEFAULT_COLORS = {'fg':'black', 'bg':'white'}
         
         def __init__(self):
@@ -493,7 +504,7 @@ class PicTimelineApp(Frame):
             ok = True
             jpeg_files = [x for x in os.listdir(output_path) if os.path.splitext(x)[1].lower() in [".jpg", ".jpeg"]]
             if jpeg_files:
-                logging.warn('No files specified for output.')
+                logging.warn('Output directory "{}" already contains image files.'.format(output_path))
                 ok = askyesno(title="Output path contains files",
                               message='"{}" already contains image files.  Do you wish to continue?'.format(output_path))
                 
@@ -575,5 +586,6 @@ root.title(APP_NAME)
 root.minsize(MIN_WIDTH, MIN_HEIGHT)
 root.geometry(DEF_SIZE)
 app = PicTimelineApp(master=root)
+# register OnExit handling so we can clean up temp files.
 root.protocol(name="WM_DELETE_WINDOW", func=app.on_window_delete)
 app.mainloop()

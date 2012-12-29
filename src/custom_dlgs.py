@@ -7,7 +7,7 @@ class MyDialog(Dialog):
 
 # -----------------------------------------------------------------------------
 # class TimeShiftDialog
-#        Custom dialog that prompts for a timeshift value in seconds
+#        Custom dialog that prompts for timedelta info.
 # -----------------------------------------------------------------------------        
 class TimeShiftDialog(MyDialog):
     def __init__(self, master, init_value, title):
