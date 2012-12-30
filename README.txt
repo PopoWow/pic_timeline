@@ -1,24 +1,11 @@
-Copyright (c) 2012-2013 Kyle Kawamura
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in 
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-IN THE SOFTWARE.
-
-
+Application : pic_timeline.pyw
+Support     : custom_dlgs.py
+              constants.py
+Third Party : EXIF.py
+                Copyright (c) 2002-2007 Gene Cash All rights reserved
+                Copyright (c) 2007-2012 Ianaré Sévi All rights reserved
+              appdirs.py
+                Copyright (c) 2005-2010 ActiveState Software Inc.        
 
 Backstory: Nowadays, everything is a camera.  When I get back from a trip I'll
 have pictures from several digital cameras, digital version of film, and items
@@ -59,7 +46,7 @@ HINTS:
    around.  Ideally, synchronize your cameras before the event!
  - Typically, photos that require extensive datetime overrides (scans, digital
    versions of film, etc) will be at the END of the list of photos (since
-   they're most likely dated AFTER your event).  Use this fact to make sure
+   they're most likely dated AFTER your event).  Use this trend to make sure
    all out of order photos are properly sequenced.
-  
-   
+ - Previewing on Windows can be a little heavy-duty so I wouldn't preview
+   hundreds of photos at a time...
