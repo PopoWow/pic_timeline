@@ -522,6 +522,10 @@ class PicTimelineApp(Frame):
             logging.warn('Output path is not set.')
             showerror(title="Output path error", message='Enter a path for the output files')
             self.handle_set_output_path()
+        elif not os.path.exists(output_path) or not os.path.isdir(output_path):
+            logging.warn('Output path is not correctly set.')
+            showerror(title="Output path error", message='Enter a VALID path for the output files')
+            self.handle_set_output_path()
         elif not prefix:
             logging.warn('Output file prefix is not set.')
             showerror(title="Output prefix error", message='Enter a prefix for the output files')
