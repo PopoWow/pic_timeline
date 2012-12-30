@@ -21,44 +21,6 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
-# Backstory: Nowadays, everything is a camera.  When I get back from a trip
-# I'll have pictures from several cameras as well as items that I scan in
-# manually.  Here's the problem: I like being able to look at the photos
-# in chronological order to relive my vacation glory but how can you do
-# that easily?  Sorting by modified time or EXIF metadata sounds good but
-# that assumes that all sources are time-synchronized.  Remember, phones
-# and tablets sync probably sync with local TZ, cameras don't...  scans have
-# no correlation to when the source was taken... and "what?  My sister's
-# point and shoot camera was set 45 minutes late?  Arggh!"
-#
-# This application attempts to fix this by allowing you to specify multiple
-# sources of photos and optionally time-shift the source to account for
-# any discrepancies.  Once images are imported from these sources you can
-# manually override individual photos with specific datetimes in case
-# a mere time-shift doesn't help (ex. scanned images).  You can preview
-# the proposed output order at any time.  On Mac, it uses the preview
-# app which is very convenient.  On Windows, the photos are copied to a
-# temp folder so that the app can specify the order which can then be
-# assessed using PhotoViewer or explorer.  No preview is available for
-# Linux at the moment (I don't have access to a Linux box to test).
-# Once the order is okay, specify an output file prefix (ex. "Honeymoon_")
-# and the output directory and then go!  You now have all your photos    
-# reordered sequentially according to filename.  The files are not
-# changed at all except for the name.
-#
-# NOTES:
-# - EXIF date-taken is used if found.  Otherwise modified-time.
-#
-# HINTS:
-#  - Add sources that will need extensive datetime overrides first.
-#  - If working with many photos and you need to override datetime
-#    values, use Finder/Explorer to get a general idea of a time
-#    range to work with, then use the preview around where the file
-#    is inserted.
-#  - Time shifting a source can be tricky to get right so should be
-#    considered a last resort.  Ideally, synchronize your cameras
-#    before the event!
-
 """
 Application: Picture Timeliner (pic_timeline_p2.py)
 
@@ -501,7 +463,12 @@ class PicTimelineApp(Frame):
                     ts = strptime(str(dt_val), "%Y:%m:%d %H:%M:%S")
                     dt = datetime.fromtimestamp(mktime(ts))
                 else:
-                    dt = datetime.fromtimestamp(os.path.getmtime(full_path))
+                    # what if getmtime fails too?  is this possible???
+                    try:
+                        mtime = os.path.getmtime(full_path)
+                    except os.error:
+                        mtime = time.time()
+                    dt = datetime.fromtimestamp(mtime)
                 
                 new_item = self.OutputsListData(new_source_dir, file, self.sources_data[new_source_dir], dt)
                 self.list_data.append(new_item)
