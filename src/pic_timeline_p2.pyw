@@ -75,7 +75,7 @@ import tempfile
 import shutil
 from Tkinter import *
 from tkFileDialog import askdirectory
-from tkMessageBox import showerror, askyesno
+from tkMessageBox import showinfo, showerror, askyesno
 from datetime import datetime, timedelta
 from time import strptime, mktime
 from operator import attrgetter
@@ -85,6 +85,7 @@ import logging
 import EXIF
 from appdirs import AppDirs
 # my support modules
+from constants import *
 from custom_dlgs import TimeShiftDialog, DateTimeDialog
 
 # -----------------------------------------------------------------------------
@@ -92,32 +93,21 @@ from custom_dlgs import TimeShiftDialog, DateTimeDialog
 # -----------------------------------------------------------------------------        
 APP_GUID = "{75a56efb-b786-424f-b6a3-9649a5d22a83}" # Not used anymore
 TEMP_DIR = "temp"
+# appdirs
+APP_NAME = "Picture Timeliner"
 # Tkinter
-HEIGHT = N+S
-WIDTH = W+E
-ALL = HEIGHT+WIDTH
 MIN_WIDTH = 480
 MIN_HEIGHT = 400
 DEF_SIZE = "640x480"
-COLS = 5
-# appdirs
-APP_NAME = "Picture Timeliner"
-DEVELOPER_NAME = "kylekawa"
+COLS = 4
 # ConfigParser
 INI_FILENAME    = "pictime.ini"
 SECT_SETTINGS   = "SETTINGS"
 OPT_ASKDIRPATH  = "OPT_ASKDIRPATH"
 # Logging
 LOG_FILE = "pictime.log"
-LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 DEF_LEVEL = 'warning'
 #DEF_LEVEL = 'info'
-LEVELS = {'debug'   : logging.DEBUG,
-          'info'    : logging.INFO,
-          'warning' : logging.WARNING,
-          'error'   : logging.ERROR,
-          'critical': logging.CRITICAL
-         }
 
 # -----------------------------------------------------------------------------
 # class TimeShiftDialog
@@ -288,9 +278,9 @@ class PicTimelineApp(Frame):
 
     def on_window_delete(self):
         # clean up temp files before exitting
-        self.clean_up_temp_dir()
-        
-        self.master.destroy()
+        if askyesno(title=APP_NAME, message="Do you want to exit?"):
+            self.clean_up_temp_dir()        
+            self.master.destroy()
         
     def clean_up_temp_dir(self):
         logging.info('Emptying temp dir: "{}"'.format(self.temp_dir))
@@ -348,14 +338,15 @@ class PicTimelineApp(Frame):
         sub_frame.rowconfigure(1, weight=1)
         sub_frame.columnconfigure(0, weight=1)
         sub_frame.columnconfigure(1, weight=1)
-        sub_frame.grid(row=0, column=2, rowspan=9, columnspan=3, sticky=ALL)
+        sub_frame.columnconfigure(2, weight=1)
+        sub_frame.grid(row=0, column=2, rowspan=9, columnspan=2, sticky=ALL)
         
-        Label(sub_frame, text="Proposed Order").grid(row=0, column=0, columnspan=2, sticky=WIDTH)
+        Label(sub_frame, text="Proposed Order").grid(row=0, column=0, columnspan=3, sticky=WIDTH)
         
         listbox_frame = Frame(sub_frame)
         listbox_frame.rowconfigure(0, weight=1)
         listbox_frame.columnconfigure(0, weight=1)
-        listbox_frame.grid(row=1, column=0, columnspan=2, sticky=ALL)
+        listbox_frame.grid(row=1, column=0, columnspan=3, sticky=ALL)
         scrollbar = Scrollbar(listbox_frame, orient=VERTICAL)
         scrollbar.grid(row=0, column=1, sticky=HEIGHT)
         self.listbox_output = Listbox(listbox_frame, selectmode=EXTENDED, yscrollcommand=scrollbar.set)
@@ -366,8 +357,11 @@ class PicTimelineApp(Frame):
                text="Select All",
                command=self.handle_select_all).grid(row=2, column=0, sticky=WIDTH)
         Button(sub_frame,
+               text="Delete",
+               command=self.handle_delete_picture).grid(row=2, column=1, sticky=WIDTH)
+        Button(sub_frame,
                text="Preview",
-               command=self.handle_preview).grid(row=2, column=1, sticky=WIDTH)
+               command=self.handle_preview).grid(row=2, column=2, sticky=WIDTH)
     
     def get_source_key(self, ndx_sel):
         item_key = self.listbox_sources.get(ndx_sel)
@@ -462,7 +456,7 @@ class PicTimelineApp(Frame):
                 
         dlg = DateTimeDialog(self, cur_item)
         if dlg.result:
-            if dlg.result == "clear":
+            if dlg.result == CLEAR_OVERRIDE:
                 del cur_item.dt
                 logging.info('"{}" reverting to original time: {}'.format(cur_item.filename, cur_item.dt))
             else:
@@ -502,9 +496,9 @@ class PicTimelineApp(Frame):
             full_path = os.path.join(new_source_dir, file)
             with open(full_path, 'rb') as f:
                 tags = EXIF.process_file(f)
-                str_datetime = str(tags['Image DateTime'])
-                if str_datetime:
-                    ts = strptime(str_datetime, "%Y:%m:%d %H:%M:%S")
+                dt_val = tags.get('Image DateTime', None)
+                if dt_val:
+                    ts = strptime(str(dt_val), "%Y:%m:%d %H:%M:%S")
                     dt = datetime.fromtimestamp(mktime(ts))
                 else:
                     dt = datetime.fromtimestamp(os.path.getmtime(full_path))
@@ -554,10 +548,20 @@ class PicTimelineApp(Frame):
                     # use copy2 to preserve metadata
                     shutil.copy2(src_path, dest_path)
                     
-                    #print file, dest_path
+                showinfo(title=APP_NAME, message="Processing done.  Thanks for using this!")
     
     def handle_select_all(self):
         self.listbox_output.selection_set(0, END)
+    
+    def handle_delete_picture(self):
+        cursel = map(int, self.listbox_output.curselection())
+        if cursel:
+            str_files = ", ".join([self.list_data[index].filename for index in cursel])
+            retval = askyesno(title=APP_NAME, message="Remove {} from output list?".format(str_files))
+            if retval:
+                for index in reversed(cursel):
+                    self.listbox_output.delete(index)    
+                    self.list_data.pop(index)
     
     def handle_preview(self):
         # indexes come back as strs... d'oh!
