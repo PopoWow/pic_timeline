@@ -24,11 +24,12 @@
 """
 Application: Picture Timeliner (pic_timeline_p2.py)
 
- - Add sources.  Double click source to enter timeshift information.
- - Override photo's time information by double clicking photos (optional)
- - Use preview feature to verify output order
- - Select output directory
- - Specify photo set's prefix
+ - Add sources.
+ - Double click source to enter timeshift information (optional).
+ - Override photo's time information by double clicking photos (optional).
+ - Use preview feature to verify output order.
+ - Select output directory.
+ - Specify photo set's prefix.
  - Go!
 """
 
@@ -168,7 +169,7 @@ class PicTimelineApp(Frame):
 
         @dt.deleter
         def dt(self):
-            """Delete process item override and revert to image file datetime + shift
+            """Delete item override and revert to photo's datetime + source's shift
             """
             # initial dt immutable
             if self.is_overriden():
@@ -467,6 +468,7 @@ class PicTimelineApp(Frame):
                     try:
                         mtime = os.path.getmtime(full_path)
                     except os.error:
+                        # if everything fails, just use the current time.
                         mtime = time.time()
                     dt = datetime.fromtimestamp(mtime)
                 
