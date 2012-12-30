@@ -7,11 +7,12 @@ Third Party : EXIF.py
               appdirs.py
                 Copyright (c) 2005-2010 ActiveState Software Inc.        
 
-Written with: Python 2.7.3
-Tested on: OSX 10.8 (Mountain Lion)
-           Windows 7 x64
-Objective : A slightly useful application to mess around with while I learn
-			Python. 
+Author       : Kyle Kawamura
+Written with : Python 2.7.3
+Tested on    : OSX 10.8 (Mountain Lion)
+               Windows 7 x64
+Objective    : A slightly useful application to mess around with while I learn
+               Python. 
            
 Backstory: Nowadays, everything is a camera.  When I get back from a trip I'll
 have pictures from several digital cameras, digital version of film, and items
