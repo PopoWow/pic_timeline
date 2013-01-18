@@ -192,6 +192,8 @@ class PicTimelineApp(Frame):
         # use appdirs to get machine specific path to appdata
         dirs = AppDirs(APP_NAME, DEVELOPER_NAME)
         self.appdata_dir = dirs.user_data_dir
+        if not os.path.exists(self.appdata_dir):
+            os.makedirs(self.appdata_dir) # by default this makes the app dirs too.
         print "App data dir: " + self.appdata_dir
         
         # initiliaze logging
